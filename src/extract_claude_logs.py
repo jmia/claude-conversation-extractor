@@ -160,6 +160,11 @@ class ClaudeConversationExtractor:
         except Exception as e:
             print(f"❌ Error reading file {jsonl_path}: {e}")
 
+        # Skip sessions where the user only typed /exit and Claude never responded
+        has_assistant = any(m["role"] == "assistant" for m in conversation)
+        if not has_assistant and any("<command-name>/exit</command-name>" in m["content"] for m in conversation if m["role"] == "user"):
+            return []
+
         return conversation
 
     def _extract_text_content(self, content, detailed: bool = False) -> str:
