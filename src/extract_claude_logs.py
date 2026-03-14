@@ -65,12 +65,13 @@ class ClaudeConversationExtractor:
                 sessions.append(jsonl_file)
         return sorted(sessions, key=lambda x: x.stat().st_mtime, reverse=True)
 
-    def extract_conversation(self, jsonl_path: Path, detailed: bool = False) -> List[Dict[str, str]]:
+    def extract_conversation(self, jsonl_path: Path, detailed: bool = False, markdown: bool = False) -> List[Dict[str, str]]:
         """Extract conversation messages from a JSONL file.
-        
+
         Args:
             jsonl_path: Path to the JSONL file
             detailed: If True, include tool use, MCP responses, and system messages
+            markdown: If True, format tool inputs with markdown code fences
         """
         conversation = []
 
@@ -101,7 +102,7 @@ class ClaudeConversationExtractor:
                             msg = entry["message"]
                             if isinstance(msg, dict) and msg.get("role") == "assistant":
                                 content = msg.get("content", [])
-                                text = self._extract_text_content(content, detailed=detailed)
+                                text = self._extract_text_content(content, detailed=detailed, markdown=markdown)
 
                                 if text and text.strip():
                                     conversation.append(
@@ -122,7 +123,7 @@ class ClaudeConversationExtractor:
                                 conversation.append(
                                     {
                                         "role": "tool_use",
-                                        "content": f"🔧 Tool: {tool_name}\nInput: {json.dumps(tool_input, indent=2)}",
+                                        "content": self._format_tool_input(tool_name, tool_input, markdown=markdown),
                                         "timestamp": entry.get("timestamp", ""),
                                     }
                                 )
@@ -167,12 +168,21 @@ class ClaudeConversationExtractor:
 
         return conversation
 
-    def _extract_text_content(self, content, detailed: bool = False) -> str:
+    def _format_tool_input(self, tool_name: str, tool_input: dict, markdown: bool = False) -> str:
+        """Format a tool call for display."""
+        if markdown:
+            body = json.dumps(tool_input, indent=2, ensure_ascii=False).replace("\\n", "\n")
+            return f"\n```\n🔧 Using tool: {tool_name}\n```\n```json\n{body}\n```\n"
+        input_lines = [f"  {k}: {v}" for k, v in tool_input.items()]
+        return f"\n🔧 Using tool: {tool_name}\nInput: {{\n" + "\n".join(input_lines) + "\n}\n"
+
+    def _extract_text_content(self, content, detailed: bool = False, markdown: bool = False) -> str:
         """Extract text from various content formats Claude uses.
-        
+
         Args:
             content: The content to extract from
             detailed: If True, include tool use blocks and other metadata
+            markdown: If True, format tool inputs with markdown code fences
         """
         if isinstance(content, str):
             return content
@@ -184,11 +194,9 @@ class ClaudeConversationExtractor:
                     if item.get("type") == "text":
                         text_parts.append(item.get("text", ""))
                     elif detailed and item.get("type") == "tool_use":
-                        # Include tool use details in detailed mode
                         tool_name = item.get("name", "unknown")
                         tool_input = item.get("input", {})
-                        text_parts.append(f"\n🔧 Using tool: {tool_name}")
-                        text_parts.append(f"Input: {json.dumps(tool_input, indent=2)}\n")
+                        text_parts.append(self._format_tool_input(tool_name, tool_input, markdown=markdown))
             return "\n".join(text_parts)
         else:
             return str(content)
@@ -727,8 +735,8 @@ class ClaudeConversationExtractor:
             if 0 <= idx < len(sessions):
                 session_path = sessions[idx]
                 if both:
-                    standard = self.extract_conversation(session_path, detailed=False)
-                    detailed_conv = self.extract_conversation(session_path, detailed=True)
+                    standard = self.extract_conversation(session_path, detailed=False, markdown=(format == "markdown"))
+                    detailed_conv = self.extract_conversation(session_path, detailed=True, markdown=(format == "markdown"))
                     if standard and detailed_conv:
                         self.save_conversation(standard, session_path.stem, format=format, jsonl_path=session_path)
                         output_path = self.save_conversation(detailed_conv, session_path.stem, format=format, jsonl_path=session_path, suffix="-detailed")
@@ -737,7 +745,7 @@ class ClaudeConversationExtractor:
                     else:
                         print(f"⏭️  Skipped session {idx + 1} (no conversation)")
                 else:
-                    conversation = self.extract_conversation(session_path, detailed=detailed)
+                    conversation = self.extract_conversation(session_path, detailed=detailed, markdown=(format == "markdown"))
                     if conversation:
                         output_path = self.save_conversation(conversation, session_path.stem, format=format, jsonl_path=session_path)
                         success += 1
@@ -947,14 +955,14 @@ Examples:
                         if extract_choice == 'y':
                             session_id = selected_path.stem
                             if args.both:
-                                standard = extractor.extract_conversation(selected_path, detailed=False)
-                                detailed_conv = extractor.extract_conversation(selected_path, detailed=True)
+                                standard = extractor.extract_conversation(selected_path, detailed=False, markdown=(args.format == "markdown"))
+                                detailed_conv = extractor.extract_conversation(selected_path, detailed=True, markdown=(args.format == "markdown"))
                                 if standard and detailed_conv:
                                     extractor.save_conversation(standard, session_id, format=args.format, jsonl_path=selected_path)
                                     extractor.save_conversation(detailed_conv, session_id, format=args.format, jsonl_path=selected_path, suffix="-detailed")
                                     print(f"✅ Saved standard + detailed copies")
                             else:
-                                conversation = extractor.extract_conversation(selected_path, detailed=args.detailed)
+                                conversation = extractor.extract_conversation(selected_path, detailed=args.detailed, markdown=(args.format == "markdown"))
                                 if conversation:
                                     output = extractor.save_conversation(conversation, session_id, format=args.format, jsonl_path=selected_path)
                                     print(f"✅ Saved: {output.name}")
@@ -1071,7 +1079,7 @@ def launch_interactive():
             try:
                 extract_choice = input("\n📤 Extract this conversation? (y/N): ").strip().lower()
                 if extract_choice == 'y':
-                    conversation = extractor.extract_conversation(selected_file)
+                    conversation = extractor.extract_conversation(selected_file, markdown=True)
                     if conversation:
                         session_id = selected_file.stem
                         output = extractor.save_as_markdown(conversation, session_id, selected_file)
