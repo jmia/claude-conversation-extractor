@@ -284,6 +284,25 @@ class ClaudeConversationExtractor:
             print(f"❌ Error displaying conversation: {e}")
             input("\nPress Enter to continue...")
 
+    def _build_filename(
+        self, conversation: List[Dict[str, str]], session_id: str, ext: str
+    ) -> str:
+        """Build a short, sortable filename for an exported conversation."""
+        first_timestamp = conversation[0].get("timestamp", "") if conversation else ""
+        if first_timestamp:
+            try:
+                dt = datetime.fromisoformat(first_timestamp.replace("Z", "+00:00"))
+                date_str = dt.strftime("%Y-%m-%d")
+                time_str = dt.strftime("%H-%M")
+            except Exception:
+                date_str = datetime.now().strftime("%Y-%m-%d")
+                time_str = datetime.now().strftime("%H-%M")
+        else:
+            now = datetime.now()
+            date_str = now.strftime("%Y-%m-%d")
+            time_str = now.strftime("%H-%M")
+        return f"cc-{date_str}-{time_str}-{session_id[:8]}.{ext}"
+
     def save_as_markdown(
         self, conversation: List[Dict[str, str]], session_id: str
     ) -> Optional[Path]:
@@ -291,11 +310,10 @@ class ClaudeConversationExtractor:
         if not conversation:
             return None
 
-        # Get timestamp from first message
+        # Get timestamp from first message for the header
         first_timestamp = conversation[0].get("timestamp", "")
         if first_timestamp:
             try:
-                # Parse ISO timestamp
                 dt = datetime.fromisoformat(first_timestamp.replace("Z", "+00:00"))
                 date_str = dt.strftime("%Y-%m-%d")
                 time_str = dt.strftime("%H:%M:%S")
@@ -306,7 +324,7 @@ class ClaudeConversationExtractor:
             date_str = datetime.now().strftime("%Y-%m-%d")
             time_str = ""
 
-        filename = f"claude-conversation-{date_str}-{session_id[:8]}.md"
+        filename = self._build_filename(conversation, session_id, "md")
         output_path = self.output_dir / filename
 
         with open(output_path, "w", encoding="utf-8") as f:
@@ -350,19 +368,14 @@ class ClaudeConversationExtractor:
         if not conversation:
             return None
 
-        # Get timestamp from first message
-        first_timestamp = conversation[0].get("timestamp", "")
-        if first_timestamp:
-            try:
-                dt = datetime.fromisoformat(first_timestamp.replace("Z", "+00:00"))
-                date_str = dt.strftime("%Y-%m-%d")
-            except Exception:
-                date_str = datetime.now().strftime("%Y-%m-%d")
-        else:
-            date_str = datetime.now().strftime("%Y-%m-%d")
-
-        filename = f"claude-conversation-{date_str}-{session_id[:8]}.json"
+        filename = self._build_filename(conversation, session_id, "json")
         output_path = self.output_dir / filename
+
+        first_timestamp = conversation[0].get("timestamp", "")
+        try:
+            date_str = datetime.fromisoformat(first_timestamp.replace("Z", "+00:00")).strftime("%Y-%m-%d")
+        except Exception:
+            date_str = datetime.now().strftime("%Y-%m-%d")
 
         # Create JSON structure
         output = {
@@ -384,7 +397,7 @@ class ClaudeConversationExtractor:
         if not conversation:
             return None
 
-        # Get timestamp from first message
+        # Get timestamp from first message for the header
         first_timestamp = conversation[0].get("timestamp", "")
         if first_timestamp:
             try:
@@ -398,7 +411,7 @@ class ClaudeConversationExtractor:
             date_str = datetime.now().strftime("%Y-%m-%d")
             time_str = ""
 
-        filename = f"claude-conversation-{date_str}-{session_id[:8]}.html"
+        filename = self._build_filename(conversation, session_id, "html")
         output_path = self.output_dir / filename
 
         # HTML template with modern styling
