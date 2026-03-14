@@ -302,7 +302,7 @@ class ClaudeConversationExtractor:
 
     def _build_filename(
         self, conversation: List[Dict[str, str]], session_id: str, ext: str,
-        jsonl_path: Optional[Path] = None
+        jsonl_path: Optional[Path] = None, suffix: str = ""
     ) -> Path:
         """Build a sortable output path (project subfolder + filename) for an export."""
         first_timestamp = conversation[0].get("timestamp", "") if conversation else ""
@@ -322,11 +322,11 @@ class ClaudeConversationExtractor:
         project_name = self._extract_project_name(jsonl_path) if jsonl_path else "unknown"
         project_dir = self.output_dir / project_name
         project_dir.mkdir(parents=True, exist_ok=True)
-        return project_dir / f"cc-{date_str}-{time_str}-{session_id[:8]}.{ext}"
+        return project_dir / f"cc-{date_str}-{time_str}-{session_id[:8]}{suffix}.{ext}"
 
     def save_as_markdown(
         self, conversation: List[Dict[str, str]], session_id: str,
-        jsonl_path: Optional[Path] = None
+        jsonl_path: Optional[Path] = None, suffix: str = ""
     ) -> Optional[Path]:
         """Save conversation as clean markdown file."""
         if not conversation:
@@ -346,7 +346,7 @@ class ClaudeConversationExtractor:
             date_str = datetime.now().strftime("%Y-%m-%d")
             time_str = ""
 
-        output_path = self._build_filename(conversation, session_id, "md", jsonl_path)
+        output_path = self._build_filename(conversation, session_id, "md", jsonl_path, suffix)
 
         with open(output_path, "w", encoding="utf-8") as f:
             f.write("# Claude Conversation Log\n\n")
@@ -384,13 +384,13 @@ class ClaudeConversationExtractor:
     
     def save_as_json(
         self, conversation: List[Dict[str, str]], session_id: str,
-        jsonl_path: Optional[Path] = None
+        jsonl_path: Optional[Path] = None, suffix: str = ""
     ) -> Optional[Path]:
         """Save conversation as JSON file."""
         if not conversation:
             return None
 
-        output_path = self._build_filename(conversation, session_id, "json", jsonl_path)
+        output_path = self._build_filename(conversation, session_id, "json", jsonl_path, suffix)
 
         first_timestamp = conversation[0].get("timestamp", "")
         try:
@@ -413,7 +413,7 @@ class ClaudeConversationExtractor:
     
     def save_as_html(
         self, conversation: List[Dict[str, str]], session_id: str,
-        jsonl_path: Optional[Path] = None
+        jsonl_path: Optional[Path] = None, suffix: str = ""
     ) -> Optional[Path]:
         """Save conversation as HTML file with syntax highlighting."""
         if not conversation:
@@ -433,7 +433,7 @@ class ClaudeConversationExtractor:
             date_str = datetime.now().strftime("%Y-%m-%d")
             time_str = ""
 
-        output_path = self._build_filename(conversation, session_id, "html", jsonl_path)
+        output_path = self._build_filename(conversation, session_id, "html", jsonl_path, suffix)
 
         # HTML template with modern styling
         html_content = f"""<!DOCTYPE html>
@@ -558,7 +558,7 @@ class ClaudeConversationExtractor:
 
     def save_conversation(
         self, conversation: List[Dict[str, str]], session_id: str, format: str = "markdown",
-        jsonl_path: Optional[Path] = None
+        jsonl_path: Optional[Path] = None, suffix: str = ""
     ) -> Optional[Path]:
         """Save conversation in the specified format.
 
@@ -567,13 +567,14 @@ class ClaudeConversationExtractor:
             session_id: Session identifier
             format: Output format ('markdown', 'json', 'html')
             jsonl_path: Path to the source JSONL file (used to derive project name)
+            suffix: Optional filename suffix (e.g. '-detailed')
         """
         if format == "markdown":
-            return self.save_as_markdown(conversation, session_id, jsonl_path)
+            return self.save_as_markdown(conversation, session_id, jsonl_path, suffix)
         elif format == "json":
-            return self.save_as_json(conversation, session_id, jsonl_path)
+            return self.save_as_json(conversation, session_id, jsonl_path, suffix)
         elif format == "html":
-            return self.save_as_html(conversation, session_id, jsonl_path)
+            return self.save_as_html(conversation, session_id, jsonl_path, suffix)
         else:
             print(f"❌ Unsupported format: {format}")
             return None
@@ -702,16 +703,17 @@ class ClaudeConversationExtractor:
         return sessions[:limit]
 
     def extract_multiple(
-        self, sessions: List[Path], indices: List[int], 
-        format: str = "markdown", detailed: bool = False
+        self, sessions: List[Path], indices: List[int],
+        format: str = "markdown", detailed: bool = False, both: bool = False
     ) -> Tuple[int, int]:
         """Extract multiple sessions by index.
-        
+
         Args:
             sessions: List of session paths
             indices: Indices to extract
             format: Output format ('markdown', 'json', 'html')
             detailed: If True, include tool use and system messages
+            both: If True, export each session twice — once standard and once detailed (with -detailed suffix)
         """
         success = 0
         total = len(indices)
@@ -719,17 +721,28 @@ class ClaudeConversationExtractor:
         for idx in indices:
             if 0 <= idx < len(sessions):
                 session_path = sessions[idx]
-                conversation = self.extract_conversation(session_path, detailed=detailed)
-                if conversation:
-                    output_path = self.save_conversation(conversation, session_path.stem, format=format, jsonl_path=session_path)
-                    success += 1
-                    msg_count = len(conversation)
-                    print(
-                        f"✅ {success}/{total}: {output_path.name} "
-                        f"({msg_count} messages)"
-                    )
+                if both:
+                    standard = self.extract_conversation(session_path, detailed=False)
+                    detailed_conv = self.extract_conversation(session_path, detailed=True)
+                    if standard and detailed_conv:
+                        self.save_conversation(standard, session_path.stem, format=format, jsonl_path=session_path)
+                        output_path = self.save_conversation(detailed_conv, session_path.stem, format=format, jsonl_path=session_path, suffix="-detailed")
+                        success += 1
+                        print(f"✅ {success}/{total}: {output_path.stem.replace('-detailed', '')}(.{format} + -detailed.{format})")
+                    else:
+                        print(f"⏭️  Skipped session {idx + 1} (no conversation)")
                 else:
-                    print(f"⏭️  Skipped session {idx + 1} (no conversation)")
+                    conversation = self.extract_conversation(session_path, detailed=detailed)
+                    if conversation:
+                        output_path = self.save_conversation(conversation, session_path.stem, format=format, jsonl_path=session_path)
+                        success += 1
+                        msg_count = len(conversation)
+                        print(
+                            f"✅ {success}/{total}: {output_path.name} "
+                            f"({msg_count} messages)"
+                        )
+                    else:
+                        print(f"⏭️  Skipped session {idx + 1} (no conversation)")
             else:
                 print(f"❌ Invalid session number: {idx + 1}")
 
@@ -817,10 +830,16 @@ Examples:
         default="markdown",
         help="Output format for exported conversations (default: markdown)"
     )
-    parser.add_argument(
+    detail_group = parser.add_mutually_exclusive_group()
+    detail_group.add_argument(
         "--detailed",
         action="store_true",
         help="Include tool use, MCP responses, and system messages in export"
+    )
+    detail_group.add_argument(
+        "--both",
+        action="store_true",
+        help="Export each conversation twice: once standard and once detailed (with -detailed suffix)"
     )
 
     args = parser.parse_args()
@@ -921,16 +940,19 @@ Examples:
                         # Offer to extract after viewing
                         extract_choice = input("\n📤 Extract this conversation? (y/N): ").strip().lower()
                         if extract_choice == 'y':
-                            conversation = extractor.extract_conversation(selected_path, detailed=args.detailed)
-                            if conversation:
-                                session_id = selected_path.stem
-                                if args.format == "json":
-                                    output = extractor.save_as_json(conversation, session_id, selected_path)
-                                elif args.format == "html":
-                                    output = extractor.save_as_html(conversation, session_id, selected_path)
-                                else:
-                                    output = extractor.save_as_markdown(conversation, session_id, selected_path)
-                                print(f"✅ Saved: {output.name}")
+                            session_id = selected_path.stem
+                            if args.both:
+                                standard = extractor.extract_conversation(selected_path, detailed=False)
+                                detailed_conv = extractor.extract_conversation(selected_path, detailed=True)
+                                if standard and detailed_conv:
+                                    extractor.save_conversation(standard, session_id, format=args.format, jsonl_path=selected_path)
+                                    extractor.save_conversation(detailed_conv, session_id, format=args.format, jsonl_path=selected_path, suffix="-detailed")
+                                    print(f"✅ Saved standard + detailed copies")
+                            else:
+                                conversation = extractor.extract_conversation(selected_path, detailed=args.detailed)
+                                if conversation:
+                                    output = extractor.save_conversation(conversation, session_id, format=args.format, jsonl_path=selected_path)
+                                    print(f"✅ Saved: {output.name}")
             except (EOFError, KeyboardInterrupt):
                 print("\n👋 Cancelled")
         
@@ -969,8 +991,10 @@ Examples:
             print(f"\n📤 Extracting {len(indices)} session(s) as {args.format.upper()}...")
             if args.detailed:
                 print("📋 Including detailed tool use and system messages")
+            elif args.both:
+                print("📋 Exporting standard + detailed copies of each session")
             success, total = extractor.extract_multiple(
-                sessions, indices, format=args.format, detailed=args.detailed
+                sessions, indices, format=args.format, detailed=args.detailed, both=args.both
             )
             print(f"\n✅ Successfully extracted {success}/{total} sessions")
 
@@ -980,10 +1004,12 @@ Examples:
         print(f"\n📤 Extracting {limit} most recent sessions as {args.format.upper()}...")
         if args.detailed:
             print("📋 Including detailed tool use and system messages")
+        elif args.both:
+            print("📋 Exporting standard + detailed copies of each session")
 
         indices = list(range(limit))
         success, total = extractor.extract_multiple(
-            sessions, indices, format=args.format, detailed=args.detailed
+            sessions, indices, format=args.format, detailed=args.detailed, both=args.both
         )
         print(f"\n✅ Successfully extracted {success}/{total} sessions")
 
@@ -992,10 +1018,12 @@ Examples:
         print(f"\n📤 Extracting all {len(sessions)} sessions as {args.format.upper()}...")
         if args.detailed:
             print("📋 Including detailed tool use and system messages")
+        elif args.both:
+            print("📋 Exporting standard + detailed copies of each session")
 
         indices = list(range(len(sessions)))
         success, total = extractor.extract_multiple(
-            sessions, indices, format=args.format, detailed=args.detailed
+            sessions, indices, format=args.format, detailed=args.detailed, both=args.both
         )
         print(f"\n✅ Successfully extracted {success}/{total} sessions")
 
