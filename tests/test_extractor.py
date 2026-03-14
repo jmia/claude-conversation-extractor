@@ -69,6 +69,56 @@ class TestExtractTextContent:
         extractor = make_extractor(tmp_path)
         assert extractor._extract_text_content(42) == "42"
 
+    def test_tool_use_in_detailed_mode_uses_plain_format_by_default(self, tmp_path):
+        extractor = make_extractor(tmp_path)
+        content = [{"type": "tool_use", "name": "Edit", "input": {"old_string": "a\nb", "new_string": "c\nd"}}]
+        result = extractor._extract_text_content(content, detailed=True)
+        assert "```" not in result
+        assert "a\nb" in result
+
+    def test_tool_use_in_detailed_mode_uses_code_fence_when_markdown_true(self, tmp_path):
+        extractor = make_extractor(tmp_path)
+        content = [{"type": "tool_use", "name": "Edit", "input": {"old_string": "a\nb", "new_string": "c\nd"}}]
+        result = extractor._extract_text_content(content, detailed=True, markdown=True)
+        assert "```json" in result
+        assert "a\nb" in result
+
+
+# ---------------------------------------------------------------------------
+# _format_tool_input
+# ---------------------------------------------------------------------------
+
+class TestFormatToolInput:
+
+    def test_plain_format_has_no_code_fence(self, tmp_path):
+        extractor = make_extractor(tmp_path)
+        result = extractor._format_tool_input("Bash", {"command": "ls -la"})
+        assert "```" not in result
+        assert "Bash" in result
+        assert "ls -la" in result
+
+    def test_markdown_format_wraps_input_in_json_code_fence(self, tmp_path):
+        extractor = make_extractor(tmp_path)
+        result = extractor._format_tool_input("Bash", {"command": "ls -la"}, markdown=True)
+        assert "```json" in result
+        assert "ls -la" in result
+
+    def test_markdown_format_wraps_tool_name_in_plain_fence(self, tmp_path):
+        extractor = make_extractor(tmp_path)
+        result = extractor._format_tool_input("Read", {"file_path": "foo.py"}, markdown=True)
+        assert "```\n🔧 Using tool: Read\n```" in result
+
+    def test_multiline_values_are_preserved_as_real_newlines(self, tmp_path):
+        extractor = make_extractor(tmp_path)
+        result = extractor._format_tool_input("Edit", {"old_string": "line1\nline2"}, markdown=True)
+        assert "line1\nline2" in result
+        assert r"\n" not in result
+
+    def test_tool_name_appears_in_output(self, tmp_path):
+        extractor = make_extractor(tmp_path)
+        result = extractor._format_tool_input("Write", {"file_path": "foo.py", "content": "x"})
+        assert "Write" in result
+
 
 # ---------------------------------------------------------------------------
 # _extract_project_name
