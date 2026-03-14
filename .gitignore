@@ -71,7 +71,6 @@ test-output/
 # Local testing
 test_conversations/
 local_tests/
-test_*.py
 
 # Database and cache files
 *.db
