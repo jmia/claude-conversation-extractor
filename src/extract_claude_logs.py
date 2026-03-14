@@ -721,7 +721,7 @@ class ClaudeConversationExtractor:
                 session_path = sessions[idx]
                 conversation = self.extract_conversation(session_path, detailed=detailed)
                 if conversation:
-                    output_path = self.save_conversation(conversation, session_path.stem, format=format)
+                    output_path = self.save_conversation(conversation, session_path.stem, format=format, jsonl_path=session_path)
                     success += 1
                     msg_count = len(conversation)
                     print(
