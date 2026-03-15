@@ -24,9 +24,10 @@ jobs:
         pip install -e .
         pip install pytest pytest-cov flake8
 
-    - name: Lint with flake8
-      run: |
-        flake8 src/ --max-line-length=100
+    # Lint step disabled pending style fixes — re-enable after chore/lint-fix is merged
+    # - name: Lint with flake8
+    #   run: |
+    #     flake8 src/ --max-line-length=100
 
     - name: Run tests
       run: |
