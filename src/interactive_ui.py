@@ -188,7 +188,7 @@ class InteractiveUI:
         if selected_file:
             # View the selected conversation
             self.extractor.display_conversation(Path(selected_file))
-            
+
             # Ask if user wants to extract it
             extract_choice = input("\n📤 Extract this conversation? (y/N): ").strip().lower()
             if extract_choice == 'y':
@@ -198,7 +198,7 @@ class InteractiveUI:
                 except ValueError:
                     print("\n❌ Error: Selected file not found in sessions list")
                     input("\nPress Enter to continue...")
-            
+
             # Return empty to go back to menu
             return []
 
