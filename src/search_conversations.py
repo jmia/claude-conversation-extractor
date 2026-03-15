@@ -619,7 +619,7 @@ class ConversationSearcher:
             # Check if all query tokens appear within a window
             words = content_lower.split()
             for i in range(len(words) - len(query_tokens)):
-                window = set(words[i : i + len(query_tokens) * 2])
+                window = set(words[i : i + len(query_tokens) * 2])  # noqa: E203
                 if query_tokens.issubset(window):
                     relevance += 0.1
                     break
