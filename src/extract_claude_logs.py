@@ -914,12 +914,18 @@ Examples:
     parser.add_argument(
         "--exact",
         type=str,
-        help="Extract a conversation by its UUID or JSONL filename (searches projects folder recursively)"
+        help=(
+            "Extract a conversation by its UUID or JSONL filename"
+            " (searches projects folder recursively)"
+        ),
     )
     parser.add_argument(
         "--include-agents",
         action="store_true",
-        help="When using --exact, also extract agent subconversation files from the UUID subdirectory"
+        help=(
+            "When using --exact, also extract agent subconversation files"
+            " from the UUID subdirectory"
+        ),
     )
 
     args = parser.parse_args()
@@ -1160,19 +1166,31 @@ Examples:
         for target in targets:
             target_id = target.stem
             if args.both:
-                standard = extractor.extract_conversation(target, detailed=False, markdown=(fmt == "markdown"))
-                detailed_conv = extractor.extract_conversation(target, detailed=True, markdown=(fmt == "markdown"))
+                is_md = fmt == "markdown"
+                standard = extractor.extract_conversation(
+                    target, detailed=False, markdown=is_md
+                )
+                detailed_conv = extractor.extract_conversation(
+                    target, detailed=True, markdown=is_md
+                )
                 if standard and detailed_conv:
                     extractor.save_conversation(standard, target_id, format=fmt, jsonl_path=target)
-                    extractor.save_conversation(detailed_conv, target_id, format=fmt, jsonl_path=target, suffix="-detailed")
+                    extractor.save_conversation(
+                        detailed_conv, target_id, format=fmt, jsonl_path=target, suffix="-detailed"
+                    )
                     success += 1
                     print(f"✅ {target.name} (standard + detailed)")
                 else:
                     print(f"⏭️  Skipped {target.name} (empty conversation)")
             else:
-                conversation = extractor.extract_conversation(target, detailed=args.detailed, markdown=(fmt == "markdown"))
+                is_md = fmt == "markdown"
+                conversation = extractor.extract_conversation(
+                    target, detailed=args.detailed, markdown=is_md
+                )
                 if conversation:
-                    output = extractor.save_conversation(conversation, target_id, format=fmt, jsonl_path=target)
+                    output = extractor.save_conversation(
+                        conversation, target_id, format=fmt, jsonl_path=target
+                    )
                     success += 1
                     print(f"✅ {output.name}")
                 else:
