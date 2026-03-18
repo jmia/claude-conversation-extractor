@@ -401,9 +401,6 @@ See [INSTALL.md](docs/user/INSTALL.md) for:
 - [x] Direct search command (`claude-search`)
 
 ### ✅ Added in [@jmia's fork](https://github.com/jmia/claude-conversation-extractor)
-- [x] Filter search by date range (`--search-date-from`, `--search-date-to`)
-- [x] Filter search by speaker (`--search-speaker`)
-- [x] Regex search (`--search-regex`)
 - [x] Dual standard+detailed export (`--both`)
 - [x] Extract by UUID or filename (`--exact`)
 - [x] Extract agent subconversation files (`--include-agents`)
