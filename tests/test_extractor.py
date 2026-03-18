@@ -463,3 +463,94 @@ class TestSaveAsHtml:
         text = result.read_text(encoding="utf-8")
         assert "<b>" not in text
         assert "&lt;b&gt;" in text
+
+
+# ---------------------------------------------------------------------------
+# find_by_uuid
+# ---------------------------------------------------------------------------
+
+class TestFindByUuid:
+
+    def _make_extractor_with_claude_dir(self, tmp_path):
+        extractor = make_extractor(tmp_path)
+        extractor.claude_dir = tmp_path / "projects"
+        extractor.claude_dir.mkdir()
+        return extractor
+
+    def test_finds_file_by_exact_uuid_stem(self, tmp_path):
+        extractor = self._make_extractor_with_claude_dir(tmp_path)
+        uuid = "abc123-def456-7890"
+        jsonl = extractor.claude_dir / "some-project" / f"{uuid}.jsonl"
+        jsonl.parent.mkdir()
+        jsonl.write_text("{}\n", encoding="utf-8")
+
+        result = extractor.find_by_uuid(uuid)
+        assert result == jsonl
+
+    def test_strips_jsonl_suffix_before_matching(self, tmp_path):
+        extractor = self._make_extractor_with_claude_dir(tmp_path)
+        uuid = "abc123-def456-7890"
+        jsonl = extractor.claude_dir / "some-project" / f"{uuid}.jsonl"
+        jsonl.parent.mkdir()
+        jsonl.write_text("{}\n", encoding="utf-8")
+
+        result = extractor.find_by_uuid(f"{uuid}.jsonl")
+        assert result == jsonl
+
+    def test_returns_none_when_uuid_not_found(self, tmp_path):
+        extractor = self._make_extractor_with_claude_dir(tmp_path)
+        result = extractor.find_by_uuid("nonexistent-uuid-0000")
+        assert result is None
+
+    def test_searches_nested_project_directories(self, tmp_path):
+        extractor = self._make_extractor_with_claude_dir(tmp_path)
+        uuid = "deep-nested-uuid"
+        nested = extractor.claude_dir / "org" / "project" / f"{uuid}.jsonl"
+        nested.parent.mkdir(parents=True)
+        nested.write_text("{}\n", encoding="utf-8")
+
+        result = extractor.find_by_uuid(uuid)
+        assert result == nested
+
+
+# ---------------------------------------------------------------------------
+# find_agent_files
+# ---------------------------------------------------------------------------
+
+class TestFindAgentFiles:
+
+    def test_returns_empty_list_when_no_agent_dir(self, tmp_path):
+        extractor = make_extractor(tmp_path)
+        session = tmp_path / "abc123.jsonl"
+        session.write_text("{}\n", encoding="utf-8")
+
+        result = extractor.find_agent_files(session)
+        assert result == []
+
+    def test_returns_agent_jsonl_files_sorted(self, tmp_path):
+        extractor = make_extractor(tmp_path)
+        session = tmp_path / "abc123.jsonl"
+        session.write_text("{}\n", encoding="utf-8")
+
+        agent_dir = tmp_path / "abc123" / "subagents"
+        agent_dir.mkdir(parents=True)
+        (agent_dir / "agent-beta.jsonl").write_text("{}\n", encoding="utf-8")
+        (agent_dir / "agent-alpha.jsonl").write_text("{}\n", encoding="utf-8")
+
+        result = extractor.find_agent_files(session)
+        names = [f.name for f in result]
+        assert names == ["agent-alpha.jsonl", "agent-beta.jsonl"]
+
+    def test_ignores_non_jsonl_files_in_agent_dir(self, tmp_path):
+        extractor = make_extractor(tmp_path)
+        session = tmp_path / "abc123.jsonl"
+        session.write_text("{}\n", encoding="utf-8")
+
+        agent_dir = tmp_path / "abc123" / "subagents"
+        agent_dir.mkdir(parents=True)
+        (agent_dir / "agent-001.jsonl").write_text("{}\n", encoding="utf-8")
+        (agent_dir / "README.txt").write_text("notes", encoding="utf-8")
+
+        result = extractor.find_agent_files(session)
+        assert len(result) == 1
+        assert result[0].name == "agent-001.jsonl"
