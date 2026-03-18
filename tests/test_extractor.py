@@ -65,6 +65,32 @@ class TestExtractTextContent:
         assert "visible" in result
         assert "Read" in result
 
+    def test_tool_result_rejection_extracts_user_message(self, tmp_path):
+        extractor = make_extractor(tmp_path)
+        content = [{
+            "type": "tool_result",
+            "is_error": True,
+            "tool_use_id": "toolu_abc",
+            "content": (
+                "The user doesn't want to proceed with this tool use. "
+                "The tool use was rejected. To tell you how to proceed, the user said:\n"
+                "I love that your idea of minimum includes a router."
+            ),
+        }]
+        result = extractor._extract_text_content(content)
+        assert "_(rejected tool use)_" in result
+        assert "I love that your idea of minimum includes a router." in result
+
+    def test_tool_result_non_error_is_skipped(self, tmp_path):
+        extractor = make_extractor(tmp_path)
+        content = [{
+            "type": "tool_result",
+            "is_error": False,
+            "tool_use_id": "toolu_abc",
+            "content": "helm not found\n\nInitialization Summary",
+        }]
+        assert extractor._extract_text_content(content) == ""
+
     def test_non_string_non_list_content_is_stringified(self, tmp_path):
         extractor = make_extractor(tmp_path)
         assert extractor._extract_text_content(42) == "42"

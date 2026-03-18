@@ -202,6 +202,15 @@ class ClaudeConversationExtractor:
                 if isinstance(item, dict):
                     if item.get("type") == "text":
                         text_parts.append(item.get("text", ""))
+                    elif item.get("type") == "tool_result" and item.get("is_error"):
+                        raw = item.get("content", "")
+                        if isinstance(raw, str):
+                            marker = "the user said:\n"
+                            idx = raw.lower().find(marker)
+                            if idx != -1:
+                                user_msg = raw[idx + len(marker):].strip()
+                                if user_msg:
+                                    text_parts.append(f"_(rejected tool use)_ {user_msg}")
                     elif detailed and item.get("type") == "tool_use":
                         tool_name = item.get("name", "unknown")
                         tool_input = item.get("input", {})
