@@ -138,6 +138,9 @@ claude-extract
 # List all Claude Code conversations
 claude-extract --list
 
+# List only the 10 most recent sessions
+claude-extract --list --limit 10
+
 # Export specific Claude chats by number
 claude-extract --extract 1,3,5
 
@@ -149,9 +152,21 @@ claude-extract --all
 
 # Save Claude logs to custom location
 claude-extract --output ~/my-claude-backups
+
+# Export with tool use, MCP responses, and system messages included
+claude-extract --detailed --extract 1
+
+# Export each conversation in both standard and detailed versions
+claude-extract --both --all
+
+# Extract a specific conversation by UUID or JSONL filename
+claude-extract --exact abc12345-6789-...
+
+# Extract a conversation and its agent subconversation files
+claude-extract --exact abc12345-6789-... --include-agents
 ```
 
-### 📄 Export Formats - NEW in v1.1.1!
+### 📄 Export Formats
 
 Export conversations in multiple formats:
 
@@ -164,6 +179,9 @@ claude-extract --format html --all
 
 # Include tool use, MCP responses, and system messages
 claude-extract --detailed --extract 1
+
+# Export each conversation in both standard and detailed versions
+claude-extract --both --recent 5
 
 # Combine options for complete exports
 claude-extract --format html --detailed --recent 5
@@ -182,6 +200,9 @@ Includes complete conversation transcript with:
 - Terminal command outputs
 - All metadata from the conversation
 
+**Both Mode (`--both`):**
+Exports each conversation twice: once in standard mode and once in detailed mode. The detailed copy gets a `-detailed` suffix in the filename.
+
 ### 🔍 Search Claude Code Chat History
 
 Search across all your Claude conversations:
@@ -192,14 +213,30 @@ claude-search                    # Prompts for search term
 claude-search "zig build"        # Search for specific term
 claude-search "error handling"   # Multi-word search
 
-# Method 2: From interactive menu
+# Method 2: Via claude-extract flags
+claude-extract --search "API integration"          # Smart full-text search
+claude-extract --search-regex "import.*requests"   # Regex search
+claude-extract --search "error" --case-sensitive   # Case-sensitive search
+
+# Filter search by date range
+claude-extract --search "deploy" --search-date-from 2025-01-01
+claude-extract --search "deploy" --search-date-from 2025-01-01 --search-date-to 2025-03-01
+
+# Filter search by speaker
+claude-extract --search "todo" --search-speaker human
+claude-extract --search "suggestion" --search-speaker assistant
+
+# Method 3: From interactive menu
 claude-extract
 # Select "Search conversations" for real-time search
 ```
 
 **Search features:**
 - Fast full-text search across all conversations
-- Case-insensitive by default
+- Case-insensitive by default (use `--case-sensitive` to override)
+- Regex support via `--search-regex`
+- Filter by date range with `--search-date-from` and `--search-date-to`
+- Filter by speaker: `human`, `assistant`, or `both` (default)
 - Finds exact matches, partial matches, and patterns
 - Shows match previews and conversation context
 - Option to extract matching sessions directly
@@ -207,18 +244,31 @@ claude-extract
 ## 📁 Where Are Claude Code Logs Stored?
 
 ### Claude Code Default Locations:
-- **macOS/Linux**: `~/.claude/projects/*/chat_*.jsonl`
-- **Windows**: `%USERPROFILE%\.claude\projects\*\chat_*.jsonl`
+- **macOS/Linux**: `~/.claude/projects/**/*.jsonl`
+- **Windows**: `%USERPROFILE%\.claude\projects\**\*.jsonl`
 - **Format**: Undocumented JSONL with base64 encoded content
 
 ### Exported Claude Conversation Locations:
 ```text
-~/Desktop/Claude logs/claude-conversation-2025-06-09-abc123.md
-├── Metadata (session ID, timestamp)
-├── User messages with 👤 prefix
-├── Claude responses with 🤖 prefix
-└── Clean Markdown formatting
+~/Desktop/Claude logs/
+└── my-project/
+    ├── cc-2025-06-09-14-32-abc12345.md        # standard export
+    ├── cc-2025-06-09-14-32-abc12345-detailed.md  # detailed export (--detailed or --both)
+    ├── cc-2025-06-09-14-32-abc12345.json      # JSON export (--format json)
+    └── cc-2025-06-09-14-32-abc12345.html      # HTML export (--format html)
 ```
+
+Exports are automatically organized into **project subfolders** based on the working directory recorded in the conversation. The filename format is:
+- `cc` prefix (Claude conversation)
+- Date and time of the first message (`YYYY-MM-DD-HH-MM`)
+- First 8 characters of the session UUID
+- Optional `-detailed` suffix for detailed exports
+
+Each exported file contains:
+- Metadata (session ID, timestamp, project path)
+- User messages with 👤 prefix
+- Claude responses with 🤖 prefix
+- Clean Markdown formatting (or JSON/HTML structure depending on format)
 
 ## ❓ Frequently Asked Questions
 
@@ -229,6 +279,10 @@ Install with `pipx install claude-conversation-extractor` then run `claude-extra
 Use the `--detailed` flag to include tool invocations, MCP responses, terminal outputs, and system messages:
 ```bash
 claude-extract --detailed --format html --extract 1
+```
+Use `--both` to export each conversation in both standard and detailed versions at once:
+```bash
+claude-extract --both --recent 5
 ```
 This gives you the complete conversation as seen in Claude's Ctrl+R view.
 
@@ -339,19 +393,23 @@ See [INSTALL.md](docs/user/INSTALL.md) for:
 
 ### ✅ Completed in v1.1.1
 - [x] Export Claude Code conversations to Markdown
-- [x] Real-time search for Claude chat history  
+- [x] Real-time search for Claude chat history
 - [x] Bulk export all Claude sessions
 - [x] Export to JSON format with metadata
 - [x] Export to HTML with beautiful formatting
 - [x] Detailed transcript mode with tool use/MCP responses
 - [x] Direct search command (`claude-search`)
 
+### ✅ Added in [@jmia's fork](https://github.com/jmia/claude-conversation-extractor)
+- [x] Dual standard+detailed export (`--both`)
+- [x] Extract by UUID or filename (`--exact`)
+- [x] Extract agent subconversation files (`--include-agents`)
+
 ### 🚧 Planned Features
 - [ ] Export to PDF format
 - [ ] Automated daily backups of Claude conversations
 - [ ] Integration with Obsidian, Notion, Roam
 - [ ] Watch mode for auto-export of new conversations
-- [ ] Filter by date range (--after, --before flags)
 - [ ] Export statistics and analytics dashboard
 
 ## ⚖️ Legal Disclaimer
