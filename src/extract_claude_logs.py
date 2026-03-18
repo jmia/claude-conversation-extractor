@@ -65,6 +65,21 @@ class ClaudeConversationExtractor:
                 sessions.append(jsonl_file)
         return sorted(sessions, key=lambda x: x.stat().st_mtime, reverse=True)
 
+    def find_by_uuid(self, uuid: str) -> Optional[Path]:
+        """Find a JSONL file by UUID/stem, searching projects recursively."""
+        stem = uuid.removesuffix(".jsonl")
+        for jsonl_file in self.claude_dir.rglob("*.jsonl"):
+            if jsonl_file.stem == stem:
+                return jsonl_file
+        return None
+
+    def find_agent_files(self, session_path: Path) -> List[Path]:
+        """Find agent JSONL files in the UUID subdirectory adjacent to session_path."""
+        agent_dir = session_path.parent / session_path.stem / "subagents"
+        if not agent_dir.exists():
+            return []
+        return sorted(agent_dir.glob("*.jsonl"))
+
     def extract_conversation(
         self, jsonl_path: Path, detailed: bool = False, markdown: bool = False
     ) -> List[Dict[str, str]]:
@@ -896,6 +911,23 @@ Examples:
         help="Export each conversation twice: once standard and once detailed (-detailed suffix)"
     )
 
+    parser.add_argument(
+        "--exact",
+        type=str,
+        help=(
+            "Extract a conversation by its UUID or JSONL filename"
+            " (searches projects folder recursively)"
+        ),
+    )
+    parser.add_argument(
+        "--include-agents",
+        action="store_true",
+        help=(
+            "When using --exact, also extract agent subconversation files"
+            " from the UUID subdirectory"
+        ),
+    )
+
     args = parser.parse_args()
 
     # Handle interactive mode
@@ -1031,6 +1063,10 @@ Examples:
 
         return
 
+    # Warn if --include-agents is used without --exact
+    if args.include_agents and not args.exact:
+        print("⚠️  --include-agents is only meaningful with --exact; ignoring")
+
     # Default action is to list sessions
     if args.list or (
         not args.extract
@@ -1038,6 +1074,7 @@ Examples:
         and not args.recent
         and not args.search
         and not args.search_regex
+        and not args.exact
     ):
         sessions = extractor.list_recent_sessions(args.limit)
 
@@ -1099,6 +1136,67 @@ Examples:
             sessions, indices, format=args.format, detailed=args.detailed, both=args.both
         )
         print(f"\n✅ Successfully extracted {success}/{total} sessions")
+
+    elif args.exact:
+        session_path = extractor.find_by_uuid(args.exact)
+        if not session_path:
+            print(f"❌ No conversation found matching UUID: {args.exact}")
+            return
+
+        session_id = session_path.stem
+        fmt = args.format
+
+        # Collect files to extract: main + optional agents
+        targets = [session_path]
+        if args.include_agents:
+            agent_files = extractor.find_agent_files(session_path)
+            if agent_files:
+                print(f"🤖 Found {len(agent_files)} agent file(s)")
+                targets.extend(agent_files)
+            else:
+                print("ℹ️  No agent files found for this conversation")
+
+        print(f"📤 Extracting {len(targets)} file(s) as {fmt.upper()}...")
+        if args.detailed:
+            print("📋 Including detailed tool use and system messages")
+        elif args.both:
+            print("📋 Exporting standard + detailed copies")
+
+        success = 0
+        for target in targets:
+            target_id = target.stem
+            if args.both:
+                is_md = fmt == "markdown"
+                standard = extractor.extract_conversation(
+                    target, detailed=False, markdown=is_md
+                )
+                detailed_conv = extractor.extract_conversation(
+                    target, detailed=True, markdown=is_md
+                )
+                if standard and detailed_conv:
+                    extractor.save_conversation(standard, target_id, format=fmt, jsonl_path=target)
+                    extractor.save_conversation(
+                        detailed_conv, target_id, format=fmt, jsonl_path=target, suffix="-detailed"
+                    )
+                    success += 1
+                    print(f"✅ {target.name} (standard + detailed)")
+                else:
+                    print(f"⏭️  Skipped {target.name} (empty conversation)")
+            else:
+                is_md = fmt == "markdown"
+                conversation = extractor.extract_conversation(
+                    target, detailed=args.detailed, markdown=is_md
+                )
+                if conversation:
+                    output = extractor.save_conversation(
+                        conversation, target_id, format=fmt, jsonl_path=target
+                    )
+                    success += 1
+                    print(f"✅ {output.name}")
+                else:
+                    print(f"⏭️  Skipped {target.name} (empty conversation)")
+
+        print(f"\n✅ Successfully extracted {success}/{len(targets)} file(s)")
 
 
 def launch_interactive():
